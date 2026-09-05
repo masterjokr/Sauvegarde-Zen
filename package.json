@@ -1,0 +1,56 @@
+{
+  "name": "sauvegarde-zen",
+  "version": "1.2.0",
+  "description": "Application Windows de sauvegarde locale incrémentale et planifiée.",
+  "main": "main/main.js",
+  "author": "",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test",
+    "package:win": "electron-builder --win nsis --x64",
+    "package:win:portable": "electron-builder --win portable --x64",
+    "release:win": "electron-builder --win nsis --x64 --publish always"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.9"
+  },
+  "devDependencies": {
+    "electron": "44.1.1",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "fr.sauvegardezen.app",
+    "productName": "Sauvegarde Zen",
+    "artifactName": "Sauvegarde-Zen-${version}-${arch}.${ext}",
+    "asar": true,
+    "files": [
+      "main/**/*",
+      "preload/**/*",
+      "renderer/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "publish": {
+      "provider": "github"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Sauvegarde Zen"
+    }
+  }
+}
