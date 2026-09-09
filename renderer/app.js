@@ -2,6 +2,9 @@
 
 const DAYS = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
 const SHORT_DAYS = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
+const LOW_SPACE_WARNING_BYTES = 1024 ** 3;
+const UPDATE_CHECKED_AT_KEY = 'sauvegarde-zen-update-checked-at';
+const DISMISSED_VERSION_KEY = 'sauvegarde-zen-dismissed-version';
 
 const elements = {
   views: document.querySelectorAll('.view'),
@@ -10,6 +13,9 @@ const elements = {
   jobsList: document.querySelector('#jobs-list'),
   historyList: document.querySelector('#history-list'),
   runningBanner: document.querySelector('#running-banner'),
+  versionBanner: document.querySelector('#version-banner'),
+  versionBannerText: document.querySelector('#version-banner-text'),
+  dismissVersionBanner: document.querySelector('#dismiss-version-banner'),
   newJobButton: document.querySelector('#new-job-button'),
   dialog: document.querySelector('#job-dialog'),
   dialogTitle: document.querySelector('#dialog-title'),
@@ -35,6 +41,7 @@ const elements = {
   minimizeToTray: document.querySelector('#minimize-to-tray'),
   notifyOnCompletion: document.querySelector('#notify-on-completion'),
   updateStatus: document.querySelector('#update-status'),
+  updateCheckedAt: document.querySelector('#update-checked-at'),
   checkUpdates: document.querySelector('#check-updates'),
   installUpdate: document.querySelector('#install-update'),
   versionsDialog: document.querySelector('#versions-dialog'),
@@ -46,7 +53,10 @@ const elements = {
 let state = { jobs: [], history: [], settings: {} };
 let schedulesDraft = [];
 const progressByJob = new Map();
+const pathHealthByJob = new Map();
+const expandedHistoryEntries = new Set();
 let versionsJobId = null;
+let currentAppVersion = null;
 
 function h(tag, attributes = {}, ...children) {
   const node = document.createElement(tag);
@@ -88,6 +98,17 @@ function formatDuration(seconds) {
   return secondsLeft ? `${minutes} min ${secondsLeft} s restantes` : `${minutes} min restantes`;
 }
 
+function formatRunDuration(startedAt, finishedAt) {
+  const start = new Date(startedAt).getTime();
+  const finish = new Date(finishedAt).getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(finish) || finish < start) return 'Non disponible';
+  const seconds = Math.max(0, Math.round((finish - start) / 1000));
+  if (seconds < 60) return `${seconds} s`;
+  const minutes = Math.floor(seconds / 60);
+  const secondsLeft = seconds % 60;
+  return secondsLeft ? `${minutes} min ${secondsLeft} s` : `${minutes} min`;
+}
+
 function showToast(message, error = false) {
   const toast = h('div', { className: `toast${error ? ' error' : ''}`, text: message });
   elements.toastRegion.append(toast);
@@ -106,6 +127,44 @@ function statusLabel(result) {
   if (result.status === 'success') return { label: 'Réussie', className: '' };
   if (result.status === 'partial') return { label: 'Avec alertes', className: 'partial' };
   return { label: 'Échec', className: 'failed' };
+}
+
+function renderPathHealth(job) {
+  const health = pathHealthByJob.get(job.id);
+  if (!health || health.status === 'checking') {
+    return h('div', { className: 'path-health checking', text: '● Vérification des dossiers…' });
+  }
+  if (health.status === 'failed') {
+    return h('div', { className: 'path-health failed', title: health.message, text: `● Dossier inaccessible · ${health.message}` });
+  }
+  if (health.status === 'warning') {
+    return h('div', { className: 'path-health warning', text: `● Accès OK · seulement ${formatBytes(health.freeBytes)} libres` });
+  }
+  const freeSpace = health.freeBytes == null ? 'espace libre non disponible' : `${formatBytes(health.freeBytes)} libres`;
+  return h('div', { className: 'path-health ok', text: `● Accès aux dossiers OK · ${freeSpace}` });
+}
+
+async function refreshPathHealth() {
+  const jobIds = new Set(state.jobs.map((job) => job.id));
+  for (const jobId of pathHealthByJob.keys()) {
+    if (!jobIds.has(jobId)) pathHealthByJob.delete(jobId);
+  }
+  state.jobs.forEach((job) => pathHealthByJob.set(job.id, { status: 'checking' }));
+  renderJobs();
+
+  await Promise.allSettled(state.jobs.map(async (job) => {
+    try {
+      const info = await window.backupAPI.inspectPaths(job.source, job.destination);
+      const warning = Number.isFinite(info.freeBytes) && info.freeBytes < LOW_SPACE_WARNING_BYTES;
+      pathHealthByJob.set(job.id, {
+        status: warning ? 'warning' : 'ok',
+        freeBytes: info.freeBytes
+      });
+    } catch (error) {
+      pathHealthByJob.set(job.id, { status: 'failed', message: error.message });
+    }
+    renderJobs();
+  }));
 }
 
 function renderSummary() {
@@ -170,7 +229,8 @@ function renderJobs() {
             h('div', { className: 'path-line' }, h('strong', { text: 'Source' }), h('code', { title: job.source, text: job.source })),
             h('div', { className: 'path-line' }, h('strong', { text: 'Destination' }), h('code', { title: job.destination, text: job.destination })),
             h('div', { className: 'path-line' }, h('strong', { text: 'Dernière' }), h('span', { text: formatDate(job.lastRunAt) }))
-          )
+          ),
+          renderPathHealth(job)
         ),
         h('div', { className: 'job-actions' }, runButton, versionsButton, openButton, editButton, toggleButton, deleteButton)
       ),
@@ -193,20 +253,58 @@ function renderHistory() {
   }
   elements.historyList.replaceChildren(...state.history.map((entry) => {
     const status = statusLabel(entry);
+    const entryId = entry.id || `${entry.jobId}-${entry.finishedAt}`;
+    const expanded = expandedHistoryEntries.has(entryId);
+    const errors = Array.isArray(entry.errors) ? entry.errors : [];
+    const totalFiles = Number(entry.totalFiles || 0);
+    const details = h('div', { className: `history-details${expanded ? '' : ' hidden'}` },
+      h('div', { className: 'history-details-grid' },
+        h('div', { className: 'history-detail' }, h('span', { text: 'Durée' }), h('strong', { text: formatRunDuration(entry.startedAt, entry.finishedAt) })),
+        h('div', { className: 'history-detail' }, h('span', { text: 'Fichiers analysés' }), h('strong', { text: totalFiles || (entry.copied || 0) + (entry.updated || 0) + (entry.skipped || 0) })),
+        h('div', { className: 'history-detail' }, h('span', { text: 'Fichiers exclus' }), h('strong', { text: entry.excluded || 0 })),
+        h('div', { className: 'history-detail' }, h('span', { text: 'Dossiers créés' }), h('strong', { text: entry.directoriesCreated || 0 })),
+        h('div', { className: 'history-detail' }, h('span', { text: 'Espace avant' }), h('strong', { text: entry.freeBytesBefore == null ? 'Non disponible' : formatBytes(entry.freeBytesBefore) })),
+        h('div', { className: 'history-detail' }, h('span', { text: 'Espace après' }), h('strong', { text: entry.freeBytesAfter == null ? 'Non disponible' : formatBytes(entry.freeBytesAfter) }))
+      ),
+      entry.message ? h('p', { className: 'history-message', text: entry.message }) : null,
+      errors.length ? h('div', { className: 'history-errors' },
+        h('strong', { text: `${errors.length} erreur(s) enregistrée(s)` }),
+        h('ul', {}, ...errors.slice(0, 20).map((error) => h('li', {},
+          h('code', { text: error.path || 'Élément inconnu' }),
+          h('span', { text: error.message || 'Erreur inconnue' })
+        ))),
+        errors.length > 20 ? h('small', { text: `${errors.length - 20} autre(s) erreur(s) non affichée(s).` }) : null
+      ) : h('p', { className: 'history-message success', text: 'Aucune erreur enregistrée pour cette exécution.' })
+    );
+    const toggleDetails = h('button', {
+      className: 'secondary-button history-toggle',
+      type: 'button',
+      text: expanded ? 'Masquer' : 'Détails',
+      onClick: () => {
+        if (expanded) expandedHistoryEntries.delete(entryId);
+        else expandedHistoryEntries.add(entryId);
+        renderHistory();
+      }
+    });
     return h('article', { className: 'history-entry' },
-      h('div', {},
-        h('strong', { text: entry.jobName }),
-        h('small', { text: `${formatDate(entry.finishedAt)} · ${entry.trigger === 'scheduled' ? 'Automatique' : entry.trigger === 'restore' ? 'Restauration' : 'Manuelle'}` })
+      h('div', { className: 'history-overview' },
+        h('div', {},
+          h('strong', { text: entry.jobName }),
+          h('small', { text: `${formatDate(entry.finishedAt)} · ${entry.trigger === 'scheduled' ? 'Automatique' : entry.trigger === 'restore' ? 'Restauration' : 'Manuelle'}` })
+        ),
+        h('div', { className: 'history-stats' },
+          h('span', { text: `${entry.copied || 0} nouveau(x)` }),
+          h('span', { text: `${entry.updated || 0} modifié(s)` }),
+          h('span', { text: `${entry.archived || 0} archivé(s)` }),
+          h('span', { text: `${entry.skipped || 0} inchangé(s)` }),
+          h('span', { text: formatBytes(entry.bytesCopied) })
+        ),
+        h('div', { className: 'history-result' },
+          h('span', { className: `result-badge ${status.className}`, title: entry.message || '', text: status.label }),
+          toggleDetails
+        )
       ),
-      h('div', { className: 'history-stats' },
-        h('span', { text: `${entry.copied || 0} nouveau(x)` }),
-        h('span', { text: `${entry.updated || 0} modifié(s)` }),
-        h('span', { text: `${entry.archived || 0} ancien(s) fichier(s)` }),
-        h('span', { text: `${entry.oldVersionsDeleted || 0} ancienne(s) supprimée(s)` }),
-        h('span', { text: `${entry.skipped || 0} inchangé(s)` }),
-        h('span', { text: formatBytes(entry.bytesCopied) })
-      ),
-      h('span', { className: `result-badge ${status.className}`, title: entry.message || '', text: status.label })
+      details
     );
   }));
 }
@@ -441,6 +539,7 @@ async function saveJob(event) {
     await window.backupAPI.saveJob(job);
     closeJobDialog();
     await refreshState();
+    await refreshPathHealth();
     showToast('Sauvegarde enregistrée.');
   } catch (error) {
     showToast(error.message, true);
@@ -459,6 +558,7 @@ async function runJob(jobId) {
     showToast(error.message, true);
   } finally {
     await refreshState();
+    await refreshPathHealth();
   }
 }
 
@@ -579,24 +679,50 @@ async function openDestination(job) {
   }
 }
 
+function renderUpdateCheckedAt(value = localStorage.getItem(UPDATE_CHECKED_AT_KEY)) {
+  if (!elements.updateCheckedAt) return;
+  elements.updateCheckedAt.textContent = value
+    ? `Dernière vérification : ${formatDate(value)}`
+    : 'Dernière vérification : jamais';
+}
+
+function markUpdateChecked() {
+  const checkedAt = new Date().toISOString();
+  localStorage.setItem(UPDATE_CHECKED_AT_KEY, checkedAt);
+  renderUpdateCheckedAt(checkedAt);
+}
+
+function showVersionBanner(version) {
+  if (!elements.versionBanner || localStorage.getItem(DISMISSED_VERSION_KEY) === version) return;
+  elements.versionBannerText.textContent = `Mise à jour réussie : vous utilisez maintenant Sauvegarde Zen ${version}.`;
+  elements.versionBanner.classList.remove('hidden');
+  localStorage.setItem(DISMISSED_VERSION_KEY, version);
+}
+
 function renderUpdateStatus(payload) {
   const status = payload?.status;
   if (!elements.updateStatus) return;
   elements.installUpdate.classList.toggle('hidden', status !== 'downloaded');
   if (status === 'development') {
-    elements.updateStatus.textContent = 'Mode développement : les mises à jour sont disponibles après installation.';
+    elements.updateStatus.textContent = `Version installée : ${currentAppVersion || 'inconnue'} · mises à jour disponibles après installation.`;
   } else if (status === 'checking') {
-    elements.updateStatus.textContent = 'Recherche d’une mise à jour sur GitHub…';
+    elements.updateStatus.textContent = `Version installée : ${currentAppVersion || 'inconnue'} · recherche sur GitHub…`;
   } else if (status === 'available') {
-    elements.updateStatus.textContent = `Version ${payload.version} trouvée : téléchargement en cours…`;
+    elements.updateStatus.textContent = `Installée : ${currentAppVersion || 'inconnue'} · disponible : ${payload.version} · téléchargement…`;
+    markUpdateChecked();
   } else if (status === 'downloading') {
-    elements.updateStatus.textContent = `Téléchargement de la version ${payload.version || ''} : ${payload.percent || 0} %`;
+    elements.updateStatus.textContent = `Installée : ${currentAppVersion || 'inconnue'} · téléchargement de ${payload.version || 'la mise à jour'} : ${payload.percent || 0} %`;
   } else if (status === 'downloaded') {
-    elements.updateStatus.textContent = `Version ${payload.version} prête. Elle sera installée au redémarrage.`;
+    elements.updateStatus.textContent = `Installée : ${currentAppVersion || 'inconnue'} · version ${payload.version} prête à être installée.`;
+    markUpdateChecked();
   } else if (status === 'not-available') {
-    elements.updateStatus.textContent = 'Vous utilisez déjà la dernière version.';
+    elements.updateStatus.textContent = `Version installée : ${currentAppVersion || payload.version || 'inconnue'} · vous êtes à jour.`;
+    markUpdateChecked();
   } else if (status === 'error') {
-    elements.updateStatus.textContent = `Vérification impossible : ${payload.message}`;
+    elements.updateStatus.textContent = `Version installée : ${currentAppVersion || 'inconnue'} · vérification impossible : ${payload.message}`;
+    markUpdateChecked();
+  } else {
+    elements.updateStatus.textContent = `Version installée : ${currentAppVersion || 'inconnue'} · mises à jour automatiques actives.`;
   }
 }
 
@@ -644,6 +770,7 @@ function bindEvents() {
   elements.settingsForm.addEventListener('submit', saveSettings);
   elements.checkUpdates.addEventListener('click', checkForUpdates);
   elements.installUpdate.addEventListener('click', installUpdate);
+  elements.dismissVersionBanner.addEventListener('click', () => elements.versionBanner.classList.add('hidden'));
   elements.dialog.addEventListener('click', (event) => {
     if (event.target === elements.dialog) closeJobDialog();
   });
@@ -663,7 +790,9 @@ function bindEvents() {
       if (job) job.running = true;
       render();
     } else if (event.type === 'backup-finished' || event.type === 'backup-failed' || event.type === 'state' || event.type === 'state-changed') {
-      refreshState().catch((error) => showToast(error.message, true));
+      refreshState()
+        .then(() => refreshPathHealth())
+        .catch((error) => showToast(error.message, true));
     }
   });
 }
@@ -673,9 +802,15 @@ async function init() {
   bindEvents();
   try {
     const version = await window.backupAPI.getAppVersion();
+    currentAppVersion = version;
     const versionElement = document.querySelector('#app-version');
     if (versionElement) versionElement.textContent = `Version ${version}`;
+    renderUpdateStatus({ status: 'idle' });
+    renderUpdateCheckedAt();
+    showVersionBanner(version);
     await refreshState();
+    await refreshPathHealth();
+    setInterval(() => refreshPathHealth().catch(() => {}), 5 * 60 * 1000);
   } catch (error) {
     showToast(`Impossible de charger l’application : ${error.message}`, true);
   }

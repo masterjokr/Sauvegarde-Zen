@@ -2,12 +2,12 @@
 
 Application Electron pour Windows permettant de sauvegarder un dossier vers un autre disque, manuellement ou selon plusieurs horaires.
 
-## Ce que fait la V1.2.4
+## Ce que fait la V1.2.5
 
-La V1.2.4 active les mises à jour depuis les Releases publiques du dépôt
-`masterjokr/Sauvegarde-Zen`. Elle utilise le moteur `electron-updater` adapté à
-l'installateur NSIS et intègre explicitement l'adresse du dépôt à chaque
-construction. Les versions de développement et préliminaires sont ignorées.
+La V1.2.5 rend l’état des sauvegardes plus lisible : contrôle automatique de
+l’accès aux dossiers et de l’espace libre, historique détaillé dépliable et
+informations plus claires sur les mises à jour. Elle conserve le système de
+mise à jour GitHub introduit en V1.2.4.
 
 - plusieurs profils source → destination ;
 - plusieurs horaires par profil : toutes les X heures, chaque jour, ou plusieurs jours de la semaine ;
@@ -23,7 +23,9 @@ construction. Les versions de développement et préliminaires sont ignorées.
 - vérification de l’accès aux dossiers, indication des disques utilisés et de l’espace libre disponible ;
 - progression de l’analyse et de la copie avec nombre de fichiers et estimation du temps restant ;
 - vérification des mises à jour GitHub depuis les réglages, avec téléchargement automatique des nouvelles releases ;
-- historique local des 200 dernières exécutions ;
+- historique local des 200 dernières exécutions, avec durée, compteurs détaillés, espace libre et erreurs lisibles ;
+- état des chemins directement sur le tableau de bord, avec alerte si la destination dispose de moins de 1 Go libre ;
+- affichage de la version installée, de la dernière vérification et d’un message de confirmation après mise à jour ;
 - fonctionnement en arrière-plan dans la zone de notification ;
 - démarrage facultatif avec Windows dans la version installée.
 
@@ -56,17 +58,17 @@ redémarrage de l’application.
 Le dépôt doit contenir le dossier `.github/workflows/release.yml`. Pour publier
 une nouvelle version :
 
-1. Modifier le numéro `version` dans `package.json` (par exemple `1.2.4`).
+1. Modifier le numéro `version` dans `package.json` (par exemple `1.2.5`).
 2. Envoyer les modifications sur GitHub.
-3. Créer et pousser un tag correspondant, par exemple `v1.2.4`.
+3. Créer et pousser un tag correspondant, par exemple `v1.2.5`.
 4. GitHub Actions lance les tests, construit l’installateur et crée la Release.
 
 ```powershell
 git add .
-git commit -m "Version 1.2.4"
+git commit -m "Version 1.2.5"
 git push
-git tag v1.2.4
-git push origin v1.2.4
+git tag v1.2.5
+git push origin v1.2.5
 ```
 
 Les utilisateurs installés ne téléchargent jamais le code source : ils reçoivent

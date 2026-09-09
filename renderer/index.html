@@ -51,6 +51,10 @@
 
           <div id="summary" class="summary-grid" aria-label="Résumé"></div>
           <div id="running-banner" class="running-banner hidden" role="status"></div>
+          <div id="version-banner" class="version-banner hidden" role="status">
+            <span id="version-banner-text"></span>
+            <button id="dismiss-version-banner" class="version-banner-close" type="button" aria-label="Fermer">×</button>
+          </div>
           <div id="jobs-list" class="jobs-list"></div>
         </section>
 
@@ -104,6 +108,7 @@
               <p class="eyebrow">MISE À JOUR</p>
               <h2 id="update-heading">Version de l’application</h2>
               <p id="update-status" class="update-status">Version installée : vérification…</p>
+              <p id="update-checked-at" class="update-checked-at">Dernière vérification : jamais</p>
             </div>
             <div class="update-actions">
               <button id="check-updates" class="secondary-button" type="button">Rechercher une mise à jour</button>
