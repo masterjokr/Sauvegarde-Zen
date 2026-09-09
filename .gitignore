@@ -3,3 +3,11 @@ dist/
 *.log
 .DS_Store
 
+# Ne jamais publier de secrets ou de certificats de signature.
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx

@@ -2,7 +2,12 @@
 
 Application Electron pour Windows permettant de sauvegarder un dossier vers un autre disque, manuellement ou selon plusieurs horaires.
 
-## Ce que fait la V1.2.0
+## Ce que fait la V1.2.4
+
+La V1.2.4 active les mises à jour depuis les Releases publiques du dépôt
+`masterjokr/Sauvegarde-Zen`. Elle utilise le moteur `electron-updater` adapté à
+l'installateur NSIS et intègre explicitement l'adresse du dépôt à chaque
+construction. Les versions de développement et préliminaires sont ignorées.
 
 - plusieurs profils source → destination ;
 - plusieurs horaires par profil : toutes les X heures, chaque jour, ou plusieurs jours de la semaine ;
@@ -51,17 +56,17 @@ redémarrage de l’application.
 Le dépôt doit contenir le dossier `.github/workflows/release.yml`. Pour publier
 une nouvelle version :
 
-1. Modifier le numéro `version` dans `package.json` (par exemple `1.2.1`).
+1. Modifier le numéro `version` dans `package.json` (par exemple `1.2.4`).
 2. Envoyer les modifications sur GitHub.
-3. Créer et pousser un tag correspondant, par exemple `v1.1.2`.
+3. Créer et pousser un tag correspondant, par exemple `v1.2.4`.
 4. GitHub Actions lance les tests, construit l’installateur et crée la Release.
 
 ```powershell
 git add .
-git commit -m "Version 1.2.1"
+git commit -m "Version 1.2.4"
 git push
-git tag v1.2.1
-git push origin v1.2.1
+git tag v1.2.4
+git push origin v1.2.4
 ```
 
 Les utilisateurs installés ne téléchargent jamais le code source : ils reçoivent
@@ -132,6 +137,10 @@ renderer/
   index.html
   styles.css
   app.js
+build/
+  icon.png            Source PNG transparente de l'icône
+  icon.ico            Icône Windows multi-résolution
+electron-builder.local.js  Construction locale sans publication
 tests/
 ```
 

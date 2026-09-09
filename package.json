@@ -1,10 +1,14 @@
 {
   "name": "sauvegarde-zen",
-  "version": "1.2.0",
+  "version": "1.2.4",
   "description": "Application Windows de sauvegarde locale incrémentale et planifiée.",
   "main": "main/main.js",
   "author": "",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/masterjokr/Sauvegarde-Zen.git"
+  },
   "private": true,
   "engines": {
     "node": ">=20"
@@ -12,8 +16,8 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test",
-    "package:win": "electron-builder --win nsis --x64",
-    "package:win:portable": "electron-builder --win portable --x64",
+    "package:win": "electron-builder --config electron-builder.local.js --win nsis --x64 --publish never",
+    "package:win:portable": "electron-builder --config electron-builder.local.js --win portable --x64 --publish never",
     "release:win": "electron-builder --win nsis --x64 --publish always"
   },
   "dependencies": {
@@ -24,8 +28,9 @@
     "electron-builder": "26.15.3"
   },
   "build": {
-    "appId": "fr.sauvegardezen.app",
+    "appId": "fr.sauvegardezen.desktop",
     "productName": "Sauvegarde Zen",
+    "executableName": "SauvegardeZen",
     "artifactName": "Sauvegarde-Zen-${version}-${arch}.${ext}",
     "asar": true,
     "files": [
@@ -34,18 +39,30 @@
       "renderer/**/*",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "build/icon.ico",
+        "to": "icon.ico"
+      }
+    ],
     "directories": {
+      "buildResources": "build",
       "output": "dist"
     },
     "publish": {
-      "provider": "github"
+      "provider": "github",
+      "owner": "masterjokr",
+      "repo": "Sauvegarde-Zen",
+      "releaseType": "release"
     },
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         "nsis"
       ]
     },
     "nsis": {
+      "guid": "897b3eee-5f61-54c4-ac50-54b2d96e6781",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,

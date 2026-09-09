@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'">
+    <title>Sauvegarde Zen</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">SZ</div>
+          <div>
+            <strong>Sauvegarde Zen</strong>
+            <span>Vos fichiers, simplement.</span>
+            <small id="app-version" class="app-version">Version…</small>
+          </div>
+        </div>
+        <nav aria-label="Navigation principale">
+          <button class="nav-item active" data-view="dashboard">
+            <span aria-hidden="true">⌂</span> Tableau de bord
+          </button>
+          <button class="nav-item" data-view="history">
+            <span aria-hidden="true">↻</span> Historique
+          </button>
+          <button class="nav-item" data-view="settings">
+            <span aria-hidden="true">⚙</span> Réglages
+          </button>
+        </nav>
+        <div class="sidebar-note">
+          <span class="status-dot"></span>
+          <div>
+            <strong>Protection active</strong>
+            <small>L’application surveille vos horaires.</small>
+          </div>
+        </div>
+      </aside>
+
+      <main class="content">
+        <section id="dashboard-view" class="view active">
+          <header class="page-header">
+            <div>
+              <p class="eyebrow">TABLEAU DE BORD</p>
+              <h1>Vos sauvegardes</h1>
+              <p>Copiez seulement les fichiers nouveaux ou modifiés, sans supprimer la destination.</p>
+            </div>
+            <button id="new-job-button" class="primary-button">＋ Nouvelle sauvegarde</button>
+          </header>
+
+          <div id="summary" class="summary-grid" aria-label="Résumé"></div>
+          <div id="running-banner" class="running-banner hidden" role="status"></div>
+          <div id="jobs-list" class="jobs-list"></div>
+        </section>
+
+        <section id="history-view" class="view">
+          <header class="page-header compact">
+            <div>
+              <p class="eyebrow">JOURNAL</p>
+              <h1>Historique</h1>
+          <p>Les 200 dernières exécutions sont conservées localement.</p>
+            </div>
+          </header>
+          <div id="history-list" class="history-list"></div>
+        </section>
+
+        <section id="settings-view" class="view">
+          <header class="page-header compact">
+            <div>
+              <p class="eyebrow">APPLICATION</p>
+              <h1>Réglages</h1>
+              <p>Choisissez le comportement général de Sauvegarde Zen.</p>
+            </div>
+          </header>
+          <form id="settings-form" class="settings-card">
+            <label class="switch-row">
+              <span>
+                <strong>Démarrer avec Windows</strong>
+                <small>Permet d’exécuter les horaires même après un redémarrage.</small>
+              </span>
+              <input id="start-with-windows" type="checkbox">
+            </label>
+            <label class="switch-row">
+              <span>
+                <strong>Rester actif dans la zone de notification</strong>
+                <small>Fermer la fenêtre masque l’application au lieu de l’arrêter.</small>
+              </span>
+              <input id="minimize-to-tray" type="checkbox">
+            </label>
+            <label class="switch-row">
+              <span>
+                <strong>Notifier à la fin d’une sauvegarde</strong>
+                <small>Affiche une notification Windows avec le résultat.</small>
+              </span>
+              <input id="notify-on-completion" type="checkbox">
+            </label>
+            <div class="form-actions align-left">
+              <button class="primary-button" type="submit">Enregistrer les réglages</button>
+            </div>
+          </form>
+          <section class="update-card" aria-labelledby="update-heading">
+            <div>
+              <p class="eyebrow">MISE À JOUR</p>
+              <h2 id="update-heading">Version de l’application</h2>
+              <p id="update-status" class="update-status">Version installée : vérification…</p>
+            </div>
+            <div class="update-actions">
+              <button id="check-updates" class="secondary-button" type="button">Rechercher une mise à jour</button>
+              <button id="install-update" class="primary-button hidden" type="button">Installer et redémarrer</button>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="job-dialog" class="dialog">
+      <form id="job-form" method="dialog">
+        <div class="dialog-header">
+          <div>
+            <p class="eyebrow">CONFIGURATION</p>
+            <h2 id="dialog-title">Nouvelle sauvegarde</h2>
+          </div>
+          <button id="close-dialog" class="icon-button" type="button" aria-label="Fermer">×</button>
+        </div>
+
+        <div class="dialog-body">
+          <input id="job-id" type="hidden">
+          <label class="field">
+            <span>Nom de la sauvegarde</span>
+            <input id="job-name" maxlength="80" required placeholder="Ex. Photos de famille">
+          </label>
+
+          <div class="path-grid">
+            <label class="field">
+              <span>Dossier source</span>
+              <div class="path-picker">
+                <input id="job-source" readonly required placeholder="Choisir le dossier à sauvegarder">
+                <button type="button" class="secondary-button choose-folder" data-target="job-source">Choisir</button>
+              </div>
+            </label>
+            <div class="path-arrow" aria-hidden="true">→</div>
+            <label class="field">
+              <span>Dossier de destination</span>
+              <div class="path-picker">
+                <input id="job-destination" readonly required placeholder="Choisir le dossier de sauvegarde">
+                <button type="button" class="secondary-button choose-folder" data-target="job-destination">Choisir</button>
+              </div>
+            </label>
+          </div>
+          <div class="path-check-row">
+            <button id="check-paths" class="secondary-button" type="button">Vérifier l’accès et l’espace libre</button>
+            <span id="path-check-result" class="path-check-result" role="status"></span>
+          </div>
+
+          <div class="section-heading">
+            <div>
+              <h3>Planification</h3>
+              <p>Ajoutez autant d’horaires que nécessaire (maximum 10).</p>
+            </div>
+            <button id="add-schedule" class="secondary-button" type="button">＋ Ajouter un horaire</button>
+          </div>
+          <div id="schedules-editor" class="schedules-editor"></div>
+
+          <label class="field exclusions-field">
+            <span>Exclusions facultatives</span>
+            <textarea id="job-exclusions" rows="3" maxlength="2000" placeholder="Un motif par ligne : node_modules, *.tmp, cache/**"></textarea>
+            <small class="field-help">Les dossiers ou fichiers correspondants ne seront pas copiés.</small>
+          </label>
+
+          <div class="reminder-box">
+            <label class="switch-row compact-switch">
+              <span>
+                <strong>Me rappeler de lancer une sauvegarde</strong>
+                <small>Notification Windows indépendante des exécutions automatiques.</small>
+              </span>
+              <input id="reminder-enabled" type="checkbox">
+            </label>
+            <div id="reminder-options" class="reminder-options hidden">
+              <label class="field small-field">
+                <span>Fréquence</span>
+                <select id="reminder-frequency">
+                  <option value="daily">Tous les jours</option>
+                  <option value="weekly">Une fois par semaine</option>
+                </select>
+              </label>
+              <label id="reminder-day-field" class="field small-field hidden">
+                <span>Jour</span>
+                <select id="reminder-weekday"></select>
+              </label>
+              <label class="field small-field">
+                <span>Heure</span>
+                <input id="reminder-time" type="time" value="18:00">
+              </label>
+            </div>
+          </div>
+
+          <label class="switch-row job-enabled-row">
+            <span>
+              <strong>Activer les sauvegardes automatiques</strong>
+              <small>Les horaires désactivés peuvent toujours être lancés manuellement.</small>
+            </span>
+            <input id="job-enabled" type="checkbox" checked>
+          </label>
+        </div>
+
+        <div class="dialog-footer">
+          <button id="cancel-dialog" class="secondary-button" type="button">Annuler</button>
+          <button class="primary-button" type="submit">Enregistrer</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="versions-dialog" class="dialog versions-dialog">
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">ANCIENNES COPIES DE FICHIERS</p>
+          <h2 id="versions-dialog-title">Fichiers archivés</h2>
+        </div>
+        <button id="close-versions-dialog" class="icon-button" type="button" aria-label="Fermer">×</button>
+      </div>
+      <div id="versions-body" class="dialog-body versions-body"></div>
+      <div class="dialog-footer">
+        <button id="cancel-versions-dialog" class="secondary-button" type="button">Fermer</button>
+      </div>
+    </dialog>
+
+    <div id="toast-region" class="toast-region" aria-live="polite"></div>
+    <script src="app.js"></script>
+  </body>
+</html>
